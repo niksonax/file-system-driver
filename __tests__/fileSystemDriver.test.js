@@ -1,5 +1,6 @@
 import FileSystemDriver from '../src/fileSystemDriver.js';
 import BlockDevice from '../src/blockDevice.js';
+import { TYPES } from '../src/fileDescriptor.js';
 
 describe('FileSystemDriver', () => {
   let driver;
@@ -162,5 +163,29 @@ describe('FileSystemDriver', () => {
     const expectedData = Buffer.alloc(fileSize);
     expectedData.set(testArr, 10);
     expect(data).toEqual(expectedData);
+  });
+
+  test('should create directory', () => {
+    const dirName = 'test_dir';
+
+    driver.mkdir(dirName);
+
+    const dirDescriptorId = driver.lookup(dirName);
+    const dirDescriptor = driver.getDescriptor(dirDescriptorId);
+    expect(dirDescriptor.fileType).toBe(TYPES.DIRECTORY);
+    expect(dirDescriptor.hardLinksCount).toBe(1);
+  });
+
+  test('should create directory inside another directory', () => {
+    const dirParentPath = 'test_parent';
+    const dirChildPath = 'test_parent/test_child';
+
+    driver.mkdir(dirParentPath);
+    driver.mkdir(dirChildPath);
+
+    const dirDescriptorId = driver.lookup(dirChildPath);
+    const dirDescriptor = driver.getDescriptor(dirDescriptorId);
+    expect(dirDescriptor.fileType).toBe(TYPES.DIRECTORY);
+    expect(dirDescriptor.hardLinksCount).toBe(1);
   });
 });

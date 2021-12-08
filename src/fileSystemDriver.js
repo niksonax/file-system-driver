@@ -125,8 +125,36 @@ class FileSystemDriver {
     this.addLink(0, fileDescriptorId, name);
   }
 
+  mkdir(path) {
+    const name = this.getFileName(path); // change
+    const dirDescriptorId = this.lookup(this.getDirectoryPath(path));
+    const directory = this.getDescriptor(dirDescriptorId);
+    const dirEntries = this.ls(directory);
+
+    const nameExists =
+      dirEntries.filter((dirEntry) => dirEntry.name === name).length !== 0;
+
+    if (nameExists) {
+      throw new Error('Directory with this name already exists!');
+    }
+
+    const fileDescriptorId = this.getUnusedFileDescriptorId();
+    const fileDescriptor = this.getDescriptor(fileDescriptorId);
+
+    fileDescriptor.fileSize = 0;
+    fileDescriptor.fileType = TYPES.DIRECTORY;
+    fileDescriptor.blockAddress1 = 0;
+    fileDescriptor.blockAddress2 = 0;
+    fileDescriptor.blockMapAddress = 0;
+    fileDescriptor.hardLinksCount = 0;
+
+    this.updateDescriptor(fileDescriptorId, fileDescriptor);
+
+    this.addLink(dirDescriptorId, fileDescriptorId, name);
+  }
+
   open(fileName) {
-    const fileDescriptorId = this.lookup(fileName);
+    const fileDescriptorId = this.lookup(fileName, 0);
     const numericFileDescriptor = this.numericFileDescriptor++;
     this.openFiles[numericFileDescriptor] = fileDescriptorId;
 
@@ -235,7 +263,7 @@ class FileSystemDriver {
   }
 
   link(fileName1, fileName2) {
-    const fileDescriptorId = this.lookup(fileName1);
+    const fileDescriptorId = this.lookup(fileName1, 0);
     this.addLink(0, fileDescriptorId, fileName2); // root directory (id = 0)
   }
 
@@ -331,7 +359,7 @@ class FileSystemDriver {
   }
 
   truncate(fileName, fileSize) {
-    const fileDescriptorId = this.lookup(fileName);
+    const fileDescriptorId = this.lookup(fileName, 0);
     const fileDescriptor = this.getDescriptor(fileDescriptorId);
 
     let blockCount = Math.ceil(fileDescriptor.fileSize / BLOCK_SIZE);
@@ -483,10 +511,6 @@ class FileSystemDriver {
     }
   }
 
-  getDirectoryPath() {}
-
-  getFileName() {}
-
   updateDescriptor(fileDescriptorId, fileDescriptor) {
     const fileDescriptorAddress = fileDescriptorId * 8 + 256;
     const fileDescriptorBlockId = Math.floor(
@@ -554,16 +578,53 @@ class FileSystemDriver {
     return this.getDescriptor(0);
   }
 
-  lookup(fileName) {
-    const dirEntries = this.ls(this.root());
+  lookup(filePath, cwd = 0) {
+    if (filePath === '') return cwd;
+
+    let dir = filePath[0] !== '/' ? this.getDescriptor(cwd) : this.root();
+
+    if (filePath[0] === '/') {
+      filePath = filePath.substring(1);
+    }
+
+    while (filePath.includes('/')) {
+      const dirName = filePath.substring(0, filePath.indexOf('/'));
+      const dirEntries = this.ls(dir);
+
+      let isDirFound = false;
+
+      for (let dirEntry of dirEntries) {
+        if (dirEntry.name === dirName) {
+          isDirFound = true;
+          dir = this.getDescriptor(dirEntry.fileDescriptorId);
+          break;
+        }
+      }
+
+      if (!isDirFound) {
+        throw new Error('Invalid path');
+      }
+
+      filePath = filePath.substring(filePath.indexOf('/') + 1);
+    }
+
+    const dirEntries = this.ls(dir);
 
     for (let dirEntry of dirEntries) {
-      if (dirEntry.name === fileName) {
+      if (dirEntry.name === filePath) {
         return dirEntry.fileDescriptorId;
       }
     }
 
     throw new Error('File not found');
+  }
+
+  getFileName(filePath) {
+    return filePath.substr(filePath.lastIndexOf('/') + 1);
+  }
+
+  getDirectoryPath(filePath) {
+    return filePath.substr(0, filePath.lastIndexOf('/'));
   }
 
   *blocks(fileDescriptor, startIndex = 0, endIndex = Infinity) {
@@ -776,6 +837,10 @@ class FileSystemDriver {
     fileDescriptor.hardLinksCount++;
     this.updateDescriptor(fileDescriptorId, fileDescriptor);
   }
+
+  /* symlink(str, path) {
+    const dirDescriptorId = this.lookup(this.getDirectoryPath(path));
+  } */
 }
 
 export default FileSystemDriver;
