@@ -99,8 +99,11 @@ class FileSystemDriver {
     return dirEntries;
   }
 
-  create(name) {
-    const directory = this.root();
+  create(filePath) {
+    const name = this.getFileName(filePath);
+
+    const dirDescriptorId = this.lookup(this.getDirectoryPath(filePath));
+    const directory = this.getDescriptor(dirDescriptorId);
     const dirEntries = this.ls(directory);
 
     const nameExists =
@@ -122,7 +125,7 @@ class FileSystemDriver {
 
     this.updateDescriptor(fileDescriptorId, fileDescriptor);
 
-    this.addLink(0, fileDescriptorId, name);
+    this.addLink(dirDescriptorId, fileDescriptorId, name);
   }
 
   mkdir(path) {
@@ -262,14 +265,20 @@ class FileSystemDriver {
     }
   }
 
-  link(fileName1, fileName2) {
-    const fileDescriptorId = this.lookup(fileName1, 0);
-    this.addLink(0, fileDescriptorId, fileName2); // root directory (id = 0)
+  link(filePath1, filePath2) {
+    const dirDescriptorId = this.lookup(this.getDirectoryPath(filePath2));
+    const fileDescriptorId = this.lookup(filePath1, 0);
+
+    const fileName2 = this.getFileName(filePath2);
+
+    this.addLink(dirDescriptorId, fileDescriptorId, fileName2);
   }
 
-  unlink(fileName) {
-    const directoryDescriptorId = 0; // root directory (id = 0)
-    const directory = this.root();
+  unlink(filePath) {
+    const fileName = this.getFileName(filePath);
+
+    const directoryDescriptorId = this.lookup(this.getDirectoryPath(filePath));
+    const directory = this.getDescriptor(directoryDescriptorId);
 
     const dirEntries = this.ls(directory);
     const dirEntryIndex = dirEntries.findIndex(

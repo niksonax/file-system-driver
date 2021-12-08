@@ -115,6 +115,22 @@ describe('FileSystemDriver', () => {
     expect(fileDescriptor.fileSize).toBe(fileSize);
   });
 
+  test('should be able to increase file size of file that located in second tier dir', () => {
+    const dirParentPath = 'test_parent';
+    const dirChildPath = `${dirParentPath}/test_child`;
+    driver.mkdir(dirParentPath);
+    driver.mkdir(dirChildPath);
+
+    const filePath = `${dirChildPath}/test`;
+    const fileSize = 300;
+    driver.create(filePath);
+
+    driver.truncate(filePath, fileSize);
+
+    const fileDescriptor = driver.getDescriptor(driver.lookup(filePath));
+    expect(fileDescriptor.fileSize).toBe(fileSize);
+  });
+
   test('should null all unused bytes after decreasing size', () => {
     const fileName = 'test';
     const fileSize = 30;
@@ -178,7 +194,7 @@ describe('FileSystemDriver', () => {
 
   test('should create directory inside another directory', () => {
     const dirParentPath = 'test_parent';
-    const dirChildPath = 'test_parent/test_child';
+    const dirChildPath = `${dirParentPath}/test_child`;
 
     driver.mkdir(dirParentPath);
     driver.mkdir(dirChildPath);
@@ -187,5 +203,51 @@ describe('FileSystemDriver', () => {
     const dirDescriptor = driver.getDescriptor(dirDescriptorId);
     expect(dirDescriptor.fileType).toBe(TYPES.DIRECTORY);
     expect(dirDescriptor.hardLinksCount).toBe(1);
+  });
+
+  test('should create file that located in second tier directory', () => {
+    const dirParentPath = 'test_parent';
+    const dirChildPath = `${dirParentPath}/test_child`;
+    driver.mkdir(dirParentPath);
+    driver.mkdir(dirChildPath);
+    const filePath = `${dirChildPath}/test_file`;
+
+    driver.create(filePath);
+
+    const fileDescriptorId = driver.lookup(filePath);
+    const fileDescriptor = driver.getDescriptor(fileDescriptorId);
+    expect(fileDescriptor.fileType).toBe(TYPES.REGULAR);
+  });
+
+  test('should link file that located in second tier directory', () => {
+    const dirParentPath = 'test_parent';
+    const dirChildPath = `${dirParentPath}/test_child`;
+    driver.mkdir(dirParentPath);
+    driver.mkdir(dirChildPath);
+    const filePath1 = `${dirChildPath}/test_file1`;
+    const filePath2 = `${dirParentPath}/test_file2`;
+
+    driver.create(filePath1);
+    driver.link(filePath1, filePath2);
+
+    const fileDescriptorId1 = driver.lookup(filePath1);
+    const fileDescriptorId2 = driver.lookup(filePath2);
+    expect(fileDescriptorId1).toEqual(fileDescriptorId2);
+  });
+
+  test('should unlink file that located in second tier directory', () => {
+    const dirParentPath = 'test_parent';
+    const dirChildPath = `${dirParentPath}/test_child`;
+    driver.mkdir(dirParentPath);
+    driver.mkdir(dirChildPath);
+    const filePath = `${dirChildPath}/test_file`;
+
+    driver.create(filePath);
+    driver.unlink(filePath);
+
+    const dirDescriptorId = driver.lookup(dirChildPath);
+    const dirDescriptor = driver.getDescriptor(dirDescriptorId);
+    const dirEntries = driver.ls(dirDescriptor);
+    expect(dirEntries).toEqual([]);
   });
 });
