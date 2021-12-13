@@ -1,5 +1,6 @@
 import FileSystemDriver from '../src/fileSystemDriver.js';
 import BlockDevice from '../src/blockDevice.js';
+import DirectoryEntry from '../src/directoryEntry.js';
 import { TYPES } from '../src/fileDescriptor.js';
 
 describe('FileSystemDriver', () => {
@@ -11,13 +12,17 @@ describe('FileSystemDriver', () => {
     driver.mkfs(500);
   });
 
-  test('should empty root directory after formatting', () => {
-    const root = driver.root();
-    driver.create('test');
-    driver.mkfs(10);
+  test('should be empty root directory after formatting', () => {
+    let root = driver.root();
     const dirEntries = driver.ls(root);
 
-    expect(dirEntries.length).toBe(0);
+    const expectedDirEntries = [
+      new DirectoryEntry('.', 0),
+      new DirectoryEntry('..', 0),
+    ];
+    root = driver.root();
+    expect(dirEntries).toEqual(expectedDirEntries);
+    expect(root.hardLinksCount).toBe(2);
   });
 
   test('should be able to create one file in root directory', () => {
@@ -26,9 +31,16 @@ describe('FileSystemDriver', () => {
     driver.create(fileName);
     const dirEntries = driver.ls(driver.root());
 
-    const fileDescriptor = driver.getDescriptor(dirEntries[0].fileDescriptorId);
-    expect(dirEntries.length).toBe(1);
-    expect(dirEntries[0].name).toBe(fileName);
+    const dirDescriptor = driver.root();
+    const fileDescriptorId = driver.lookup(`/${fileName}`);
+    const fileDescriptor = driver.getDescriptor(fileDescriptorId);
+    const expectedDirEntries = [
+      new DirectoryEntry('.', 0),
+      new DirectoryEntry('..', 0),
+      new DirectoryEntry(fileName, 1),
+    ];
+    expect(dirEntries).toEqual(expectedDirEntries);
+    expect(dirDescriptor.hardLinksCount).toBe(2); // . and ..
     expect(fileDescriptor.hardLinksCount).toBe(1);
   });
 
@@ -40,8 +52,11 @@ describe('FileSystemDriver', () => {
     });
     const dirEntries = driver.ls(driver.root());
 
-    expect(dirEntries.length).toBe(fileNames.size);
-    expect(new Set(dirEntries.map((e) => e.name))).toEqual(fileNames);
+    const expectedDirEntriesNames = new Set([...fileNames, '.', '..']);
+    expect(dirEntries.length).toBe(fileNames.size + 2);
+    expect(new Set(dirEntries.map((e) => e.name))).toEqual(
+      expectedDirEntriesNames
+    );
   });
 
   test('should be able to create many files in root directory', () => {
@@ -56,8 +71,11 @@ describe('FileSystemDriver', () => {
     });
     const dirEntries = driver.ls(driver.root());
 
-    expect(dirEntries.length).toBe(fileNames.size);
-    expect(new Set(dirEntries.map((e) => e.name))).toEqual(fileNames);
+    const expectedDirEntriesNames = new Set([...fileNames, '.', '..']);
+    expect(dirEntries.length).toBe(fileNames.size + 2);
+    expect(new Set(dirEntries.map((e) => e.name))).toEqual(
+      expectedDirEntriesNames
+    );
   });
 
   test('should create file hard link', () => {
@@ -68,14 +86,19 @@ describe('FileSystemDriver', () => {
     driver.link(fileName1, fileName2);
     const dirEntries = driver.ls(driver.root());
 
-    const fileDescriptor = driver.getDescriptor(dirEntries[0].fileDescriptorId);
+    const fileDescriptor1 = driver.getDescriptor(
+      driver.lookup(`/${fileName1}`)
+    );
+    const fileDescriptor2 = driver.getDescriptor(
+      driver.lookup(`/${fileName2}`)
+    );
     expect(new Set(dirEntries.map((e) => e.name))).toEqual(
-      new Set([fileName1, fileName2])
+      new Set([fileName1, fileName2, '.', '..'])
     );
-    expect(dirEntries[0].fileDescriptorId).toEqual(
-      dirEntries[1].fileDescriptorId
+    expect(fileDescriptor1.fileDescriptorId).toEqual(
+      fileDescriptor2.fileDescriptorId
     );
-    expect(fileDescriptor.hardLinksCount).toBe(2);
+    expect(fileDescriptor1.hardLinksCount).toBe(2);
   });
 
   test('should remove file when hard link is 0', () => {
@@ -85,7 +108,7 @@ describe('FileSystemDriver', () => {
     driver.unlink(fileName);
     const dirEntries = driver.ls(driver.root());
 
-    expect(dirEntries.length).toEqual(0);
+    expect(dirEntries.length).toEqual(2);
   });
 
   test('should reduce hard link count when unlinking', () => {
@@ -101,7 +124,7 @@ describe('FileSystemDriver', () => {
 
     const fileDescriptor = driver.getDescriptor(fileDescriptorId);
     expect(fileDescriptor.hardLinksCount).toBe(1);
-    expect(dirEntries.length).toBe(1);
+    expect(dirEntries.length).toBe(3);
   });
 
   test('should be able to increase file size (simple truncate)', () => {
@@ -188,8 +211,10 @@ describe('FileSystemDriver', () => {
 
     const dirDescriptorId = driver.lookup(dirName);
     const dirDescriptor = driver.getDescriptor(dirDescriptorId);
+    const root = driver.root();
     expect(dirDescriptor.fileType).toBe(TYPES.DIRECTORY);
-    expect(dirDescriptor.hardLinksCount).toBe(1);
+    expect(dirDescriptor.hardLinksCount).toBe(2); // by itself and by root
+    expect(root.hardLinksCount).toBe(3);
   });
 
   test('should create directory inside another directory', () => {
@@ -202,7 +227,7 @@ describe('FileSystemDriver', () => {
     const dirDescriptorId = driver.lookup(dirChildPath);
     const dirDescriptor = driver.getDescriptor(dirDescriptorId);
     expect(dirDescriptor.fileType).toBe(TYPES.DIRECTORY);
-    expect(dirDescriptor.hardLinksCount).toBe(1);
+    expect(dirDescriptor.hardLinksCount).toBe(2);
   });
 
   test('should create file that located in second tier directory', () => {
@@ -248,6 +273,9 @@ describe('FileSystemDriver', () => {
     const dirDescriptorId = driver.lookup(dirChildPath);
     const dirDescriptor = driver.getDescriptor(dirDescriptorId);
     const dirEntries = driver.ls(dirDescriptor);
-    expect(dirEntries).toEqual([]);
+    expect(dirEntries).toEqual([
+      new DirectoryEntry('.', 2),
+      new DirectoryEntry('..', 1),
+    ]);
   });
 });

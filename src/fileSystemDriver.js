@@ -55,7 +55,7 @@ class FileSystemDriver {
     buffer[257] = 0;
     buffer[258] = 0;
     buffer[259] = 0;
-    buffer[260] = 1;
+    buffer[260] = 0;
     buffer[261] = 0;
     buffer[262] = 0;
     buffer[263] = 0;
@@ -70,6 +70,9 @@ class FileSystemDriver {
         buffer.subarray(i * BLOCK_SIZE, (i + 1) * BLOCK_SIZE)
       );
     }
+
+    this.addLink(0, 0, '.');
+    this.addLink(0, 0, '..');
   }
 
   mount() {} // class constructor = mount()
@@ -154,6 +157,8 @@ class FileSystemDriver {
     this.updateDescriptor(fileDescriptorId, fileDescriptor);
 
     this.addLink(dirDescriptorId, fileDescriptorId, name);
+    this.addLink(fileDescriptorId, fileDescriptorId, '.');
+    this.addLink(fileDescriptorId, dirDescriptorId, '..');
   }
 
   open(fileName) {
