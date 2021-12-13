@@ -6,10 +6,13 @@ const BLOCKS_IN_BLOCK_MAP = 255;
 
 const ZERO_BLOCK_ADDRESS = 255; // max value in 1 byte memory
 
+const MAX_SYMLINK_DEPTH = 3;
+
 export {
   BLOCK_SIZE,
   DEVICE_SIZE,
   DIR_ENTRIES_IN_BLOCK,
   BLOCKS_IN_BLOCK_MAP,
   ZERO_BLOCK_ADDRESS,
+  MAX_SYMLINK_DEPTH,
 };
