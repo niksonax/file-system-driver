@@ -161,6 +161,22 @@ class FileSystemDriver {
     this.addLink(fileDescriptorId, dirDescriptorId, '..');
   }
 
+  rmdir(path) {
+    const dirDescriptorId = this.lookup(path);
+    const directory = this.getDescriptor(dirDescriptorId);
+    const dirName = this.getFileName(path);
+
+    if (directory.hardLinksCount > 2) {
+      throw new Error("Directory isn't empty!");
+    }
+
+    const parentDirId = this.lookup(`${path}/..`);
+
+    this._unlink(parentDirId, dirName);
+    this._unlink(dirDescriptorId, '..');
+    this._unlink(dirDescriptorId, '.');
+  }
+
   open(fileName) {
     const fileDescriptorId = this.lookup(fileName, 0);
     const numericFileDescriptor = this.numericFileDescriptor++;
@@ -175,6 +191,15 @@ class FileSystemDriver {
 
   read(numericFileDescriptor, offset, size) {
     const fileDescriptorId = this.openFiles[numericFileDescriptor];
+
+    if (!fileDescriptorId) {
+      throw new Error('File must be opened');
+    }
+
+    return this._read(fileDescriptorId, offset, size);
+  }
+
+  _read(fileDescriptorId, offset, size) {
     const fileDescriptor = this.getDescriptor(fileDescriptorId);
 
     const startBlockIndex = Math.floor(offset / BLOCK_SIZE);
@@ -211,6 +236,15 @@ class FileSystemDriver {
 
   write(numericFileDescriptor, offset, data) {
     const fileDescriptorId = this.openFiles[numericFileDescriptor];
+
+    if (!fileDescriptorId) {
+      throw new Error('File must be opened');
+    }
+
+    this._write(fileDescriptorId, offset, data);
+  }
+
+  _write(fileDescriptorId, offset, data) {
     const fileDescriptor = this.getDescriptor(fileDescriptorId);
 
     const startBlockIndex = Math.floor(offset / BLOCK_SIZE);
@@ -283,6 +317,19 @@ class FileSystemDriver {
     const fileName = this.getFileName(filePath);
 
     const directoryDescriptorId = this.lookup(this.getDirectoryPath(filePath));
+    const directory = this.getDescriptor(directoryDescriptorId);
+
+    const fileDescriptorId = this.lookup(filePath);
+    const fileDescriptor = this.getDescriptor(fileDescriptorId);
+
+    if (fileDescriptor.fileType === TYPES.DIRECTORY) {
+      throw new Error("You can't unlink a directory");
+    }
+
+    this._unlink(directoryDescriptorId, fileName);
+  }
+
+  _unlink(directoryDescriptorId, fileName) {
     const directory = this.getDescriptor(directoryDescriptorId);
 
     const dirEntries = this.ls(directory);
@@ -374,6 +421,16 @@ class FileSystemDriver {
 
   truncate(fileName, fileSize) {
     const fileDescriptorId = this.lookup(fileName, 0);
+    const fileDescriptor = this.getDescriptor(fileDescriptorId);
+
+    if (fileDescriptor.fileType === TYPES.DIRECTORY) {
+      throw new Error("You can't truncate a directory");
+    }
+
+    this._truncate(fileDescriptorId, fileSize);
+  }
+
+  _truncate(fileDescriptorId, fileSize) {
     const fileDescriptor = this.getDescriptor(fileDescriptorId);
 
     let blockCount = Math.ceil(fileDescriptor.fileSize / BLOCK_SIZE);
@@ -852,9 +909,39 @@ class FileSystemDriver {
     this.updateDescriptor(fileDescriptorId, fileDescriptor);
   }
 
-  /* symlink(str, path) {
+  symlink(str, path) {
+    const name = this.getFileName(path);
+
     const dirDescriptorId = this.lookup(this.getDirectoryPath(path));
-  } */
+    const directory = this.getDescriptor(dirDescriptorId);
+    const dirEntries = this.ls(directory);
+
+    const nameExists =
+      dirEntries.filter((dirEntry) => dirEntry.name === name).length !== 0;
+
+    if (nameExists) {
+      throw new Error('Directory with this name already exists!');
+    }
+
+    const fileDescriptorId = this.getUnusedFileDescriptorId();
+    const fileDescriptor = this.getDescriptor(fileDescriptorId);
+
+    fileDescriptor.fileSize = 0;
+    fileDescriptor.fileType = TYPES.SYMLINK;
+    fileDescriptor.blockAddress1 = 0;
+    fileDescriptor.blockAddress2 = 0;
+    fileDescriptor.blockMapAddress = 0;
+    fileDescriptor.hardLinksCount = 0;
+
+    this.updateDescriptor(fileDescriptorId, fileDescriptor);
+
+    this.addLink(dirDescriptorId, fileDescriptorId, name);
+
+    this._truncate(fileDescriptorId, str.length);
+
+    const strData = Buffer.from(str);
+    this._write(fileDescriptorId, 0, strData);
+  }
 }
 
 export default FileSystemDriver;

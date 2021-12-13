@@ -28,6 +28,9 @@ class FileDescriptor {
       case TYPES.UNUSED:
         this.fileType = TYPES.UNUSED;
         break;
+      case TYPES.SYMLINK:
+        this.fileType = TYPES.SYMLINK;
+        break;
       default:
         break;
     }
@@ -64,6 +67,7 @@ class FileDescriptor {
 const TYPES = {
   REGULAR: 0,
   DIRECTORY: 1,
+  SYMLINK: 2,
   UNUSED: 255,
 };
 
