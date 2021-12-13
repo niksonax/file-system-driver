@@ -14,6 +14,7 @@ import {
   BLOCKS_IN_BLOCK_MAP,
   BLOCK_SIZE,
   DIR_ENTRIES_IN_BLOCK,
+  MAX_SYMLINK_DEPTH,
   ZERO_BLOCK_ADDRESS,
 } from '../constants/constants.js';
 import { getInt32FromBytes, getInt32ToBytes } from '../helpers/helpers.js';
@@ -649,7 +650,7 @@ class FileSystemDriver {
     return this.getDescriptor(0);
   }
 
-  lookup(filePath, cwd = 0) {
+  lookup(filePath, cwd = 0, resolveSymlink = false, symlinkDepth = 0) {
     if (filePath === '') return cwd;
 
     let dir = filePath[0] !== '/' ? this.getDescriptor(cwd) : this.root();
@@ -662,12 +663,40 @@ class FileSystemDriver {
       const dirName = filePath.substring(0, filePath.indexOf('/'));
       const dirEntries = this.ls(dir);
 
+      filePath = filePath.substring(filePath.indexOf('/') + 1);
+
       let isDirFound = false;
 
       for (let dirEntry of dirEntries) {
         if (dirEntry.name === dirName) {
           isDirFound = true;
-          dir = this.getDescriptor(dirEntry.fileDescriptorId);
+          const nextDir = this.getDescriptor(dirEntry.fileDescriptorId);
+
+          if (nextDir.fileType === TYPES.SYMLINK) {
+            if (symlinkDepth >= MAX_SYMLINK_DEPTH) {
+              throw new Error('Max symlink depth level reached');
+            }
+            symlinkDepth++;
+
+            const str = this._read(
+              dirEntry.fileDescriptorId,
+              0,
+              nextDir.fileSize
+            ).toString();
+            console.log(str);
+            const isPathAbsolute = str[0] === '/';
+
+            if (isPathAbsolute) {
+              filePath =
+                str === '/' ? filePath : `${str.substring(1)}/${filePath}`;
+              dir = this.root();
+            } else {
+              filePath = `./${str}/${filePath}`;
+            }
+          } else {
+            dir = nextDir;
+          }
+
           break;
         }
       }
@@ -675,18 +704,33 @@ class FileSystemDriver {
       if (!isDirFound) {
         throw new Error('Invalid path');
       }
-
-      filePath = filePath.substring(filePath.indexOf('/') + 1);
     }
 
     const dirEntries = this.ls(dir);
 
     for (let dirEntry of dirEntries) {
       if (dirEntry.name === filePath) {
+        if (resolveSymlink) {
+          const fileDescriptor = this.getDescriptor(dirEntry.fileDescriptorId);
+
+          if (fileDescriptor.fileType === TYPES.SYMLINK) {
+            if (symlinkDepth >= MAX_SYMLINK_DEPTH) {
+              throw new Error('Max symlink depth level reached');
+            }
+            symlinkDepth++;
+
+            const str = this._read(
+              dirEntry.fileDescriptorId,
+              0,
+              fileDescriptor.fileSize
+            ).toString();
+
+            return this.lookup(str, dir.fileDescriptorId, true, symlinkDepth);
+          }
+        }
         return dirEntry.fileDescriptorId;
       }
     }
-
     throw new Error('File not found');
   }
 
