@@ -177,11 +177,12 @@ describe('FileSystemDriver', () => {
 
   test('should set new bytes in 0 after increasing file size', () => {
     const fileName = 'test';
+    const filePath = `/${fileName}`;
     const fileSize = 300;
-    driver.create(fileName);
-    driver.truncate(fileName, fileSize);
+    driver.create(filePath);
+    driver.truncate(filePath, fileSize);
 
-    const numericFileDescriptor = driver.open(fileName);
+    const numericFileDescriptor = driver.open(filePath);
     const data = driver.read(numericFileDescriptor, 0, fileSize);
 
     expect(data.length).toBe(fileSize);
@@ -277,5 +278,69 @@ describe('FileSystemDriver', () => {
       new DirectoryEntry('.', 2),
       new DirectoryEntry('..', 1),
     ]);
+  });
+
+  test('should be able to delete directory', () => {
+    const dirParentPath = 'test_parent';
+    const dirChildPath = `${dirParentPath}/test_child`;
+
+    driver.mkdir(dirParentPath);
+    driver.mkdir(dirChildPath);
+    driver.rmdir(dirChildPath);
+
+    const dirDescriptorId = driver.lookup(dirParentPath);
+    const dirDescriptor = driver.getDescriptor(dirDescriptorId);
+    const dirEntries = driver.ls(dirDescriptor);
+    expect(dirDescriptor.fileType).toBe(TYPES.DIRECTORY);
+    expect(dirDescriptor.hardLinksCount).toBe(2);
+    expect(dirEntries).toEqual([
+      new DirectoryEntry('.', 1),
+      new DirectoryEntry('..', 0),
+    ]);
+  });
+
+  test('should be able to create symlink', () => {
+    const symlinkName = 'test_symlink';
+    const str = 'test_string';
+
+    driver.symlink(str, symlinkName);
+
+    const dirEntries = driver.ls(driver.root());
+    const expectedDirEntries = [
+      new DirectoryEntry('.', 0),
+      new DirectoryEntry('..', 0),
+      new DirectoryEntry(symlinkName, 1),
+    ];
+    const symlink = driver.getDescriptor(1);
+    expect(dirEntries).toEqual(expectedDirEntries);
+    expect(symlink.fileType).toBe(TYPES.SYMLINK);
+    expect(symlink.fileSize).toEqual(str.length);
+  });
+
+  test('should correctly work with symlink in lookup (absolute path)', () => {
+    const symlinkName = 'test_symlink';
+    const str = '/';
+
+    driver.symlink(str, symlinkName);
+    const symlinkDescriptorId = driver.lookup(`/${symlinkName}/${symlinkName}`);
+
+    expect(symlinkDescriptorId).toBe(1);
+  });
+
+  test('should correctly work with symlink in lookup (relative path)', () => {
+    const symlinkName = 'test_symlink';
+    const dirName = 'test_dir';
+    const symlinkPath = `${dirName}/${symlinkName}`;
+    const str = '..';
+
+    driver.mkdir(dirName);
+    driver.symlink(str, symlinkPath);
+    const symlinkDescriptorId = driver.lookup(
+      `/${dirName}/${symlinkName}`,
+      0,
+      true
+    );
+
+    expect(symlinkDescriptorId).toBe(0); // root always 0
   });
 });
