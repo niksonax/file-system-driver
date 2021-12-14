@@ -651,6 +651,7 @@ class FileSystemDriver {
   }
 
   lookup(filePath, cwd = 0, resolveSymlink = false, symlinkDepth = 0) {
+    if (filePath === '/') return 0; // root id
     if (filePath === '') return cwd;
 
     let dir = filePath[0] !== '/' ? this.getDescriptor(cwd) : this.root();
@@ -683,7 +684,6 @@ class FileSystemDriver {
               0,
               nextDir.fileSize
             ).toString();
-            console.log(str);
             const isPathAbsolute = str[0] === '/';
 
             if (isPathAbsolute) {
