@@ -1,18 +1,34 @@
+import Terminal from './src/terminal.js';
 import BlockDevice from './src/blockDevice.js';
 import FileSystemDriver from './src/fileSystemDriver.js';
 
 const blockDevice = new BlockDevice('blockDevice.txt');
 const driver = new FileSystemDriver(blockDevice);
+const terminal = new Terminal(driver);
 
-driver.mkfs(100);
+terminal.mkfs(100);
 
-const fileName = 'test';
-const fileSize = 30;
-driver.create(fileName);
+terminal.mkdir('test_dir_1');
+terminal.cd('test_dir_1');
+terminal.mkdir('test_dir_2');
 
-driver.truncate(fileName, fileSize);
-const numericFileDescriptor = driver.open(fileName);
+console.log(terminal.cwd());
 
-const data = driver.read(numericFileDescriptor, 0, fileSize);
+terminal.cd('test_dir_2');
+console.log(terminal.cwd());
+terminal.create('test_file');
 
-// All further tests are in __tests__ folder
+console.log(terminal.cwd());
+console.log(terminal.ls());
+
+const symlinkName = 'test_symlink';
+const str = '/';
+
+terminal.symlink(str, symlinkName);
+console.log(terminal.ls());
+terminal.cd(symlinkName);
+
+console.log(terminal.cwd());
+console.log(terminal.ls());
+
+// Just a basic example. All further tests are in __tests__ folder
